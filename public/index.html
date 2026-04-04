@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LUNO Store</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <div class="brand">LUNO</div>
+
+      <nav class="main-nav">
+        <a href="#">Shop</a>
+        <a href="#">About</a>
+        <a href="#">Journal</a>
+        <a href="#">Support</a>
+      </nav>
+
+      <div class="header-actions">
+        <a href="#">Search</a>
+        <a href="#">Cart</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <section class="hero">
+      <div class="container hero-inner">
+        <div class="hero-text">
+          <p class="eyebrow">Curated workspace essentials</p>
+          <h1>毎日の作業を、<br />もっと心地よく。</h1>
+          <p class="hero-description">
+            キーボード、マウス、モニターなど、
+            デスク環境を整えるためのアイテムを揃えたデモストアです。
+          </p>
+          <a href="#product-list" class="hero-button">商品を見る</a>
+        </div>
+
+        <div class="hero-visual">
+          <img src="/images/image01.jpg" alt="Featured Product" />
+        </div>
+      </div>
+    </section>
+
+    <section class="product-section">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <p class="section-label">Featured Items</p>
+            <h2>Products</h2>
+          </div>
+        </div>
+
+        <div id="product-list" class="product-grid"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <div>
+        <div class="footer-brand">LUNO</div>
+        <p class="footer-copy">© 2026 LUNO Store</p>
+      </div>
+
+      <div class="footer-links">
+        <a href="#">Privacy</a>
+        <a href="#">Terms</a>
+        <a href="#">Contact</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    async function loadProducts() {
+      const res = await fetch("/products");
+      const products = await res.json();
+
+      const productList = document.getElementById("product-list");
+
+      productList.innerHTML = products.map((product) => {
+        const soldOut = product.stock <= 0;
+
+        return `
+          <article class="product-card">
+            <div class="product-image">
+              <img src="/images/image0${product.id}.jpg" alt="${product.name}" />
+            </div>
+
+            <div class="product-body">
+              <div class="product-title">${product.name}</div>
+              <p class="product-subtitle">
+                デスク環境を整えるための定番アイテムです。
+              </p>
+
+              <div class="product-price-row">
+                <span class="price-symbol">¥</span>
+                <span class="product-price">${product.price.toLocaleString()}</span>
+              </div>
+
+              <div class="stock">
+                ${soldOut ? "Out of stock" : `在庫 ${product.stock}`}
+              </div>
+
+              <button
+                class="cart-button"
+                onclick="orderProduct(${product.id})"
+                ${soldOut ? "disabled" : ""}
+              >
+                ${soldOut ? "Sold out" : "Add to cart"}
+              </button>
+            </div>
+          </article>
+        `;
+      }).join("");
+    }
+
+    async function orderProduct(productId) {
+      const res = await fetch("/orders", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          items: [{ productId, quantity: 1 }]
+        })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.message || "注文に失敗しました");
+        return;
+      }
+
+      alert("注文しました: 合計 ¥" + data.total.toLocaleString());
+      loadProducts();
+    }
+
+    loadProducts();
+  </script>
+</body>
+</html>
