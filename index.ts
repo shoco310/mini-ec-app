@@ -1,12 +1,12 @@
-import express from "express";
+import express, { Request, Response } from "express";
 import path from "path";
 
 const app = express();
 
-// JSON受け取る
+// JSON受け取り
 app.use(express.json());
 
-// publicフォルダを配信（これでHTML表示できる）
+// public フォルダを配信
 app.use(express.static(path.join(__dirname, "public")));
 
 // --------------------
@@ -42,40 +42,94 @@ let products: Product[] = [
 let orders: Order[] = [];
 
 // --------------------
-// API
+// 共通関数
 // --------------------
-
-// 商品一覧
-app.get("/products", (req, res) => {
-  res.json(products);
-});
-
-// 注文作成
-app.post("/orders", (req, res) => {
-  const { items } = req.body as { items: OrderItem[] };
-
-  if (!items || !Array.isArray(items) || items.length === 0) {
-    return res.status(400).json({ message: "Items are required" });
+function validateOrderItems(items: unknown): items is OrderItem[] {
+  if (!Array.isArray(items) || items.length === 0) {
+    return false;
   }
 
+  return items.every((item) => {
+    if (typeof item !== "object" || item === null) {
+      return false;
+    }
+
+    const orderItem = item as OrderItem;
+
+    return (
+      typeof orderItem.productId === "number" &&
+      typeof orderItem.quantity === "number" &&
+      orderItem.quantity > 0
+    );
+  });
+}
+
+function findProductById(productId: number): Product | undefined {
+  return products.find((product) => product.id === productId);
+}
+
+function validateProductsExist(items: OrderItem[]): { ok: true } | { ok: false; productId: number } {
+  for (const item of items) {
+    const product = findProductById(item.productId);
+
+    if (!product) {
+      return { ok: false, productId: item.productId };
+    }
+  }
+
+  return { ok: true };
+}
+
+function validateStock(items: OrderItem[]): { ok: true } | { ok: false; productId: number; stock: number; requested: number } {
+  for (const item of items) {
+    const product = findProductById(item.productId);
+
+    if (!product) {
+      continue;
+    }
+
+    if (product.stock < item.quantity) {
+      return {
+        ok: false,
+        productId: item.productId,
+        stock: product.stock,
+        requested: item.quantity,
+      };
+    }
+  }
+
+  return { ok: true };
+}
+
+function calculateTotal(items: OrderItem[]): number {
   let total = 0;
 
   for (const item of items) {
-    const product = products.find((p) => p.id === item.productId);
+    const product = findProductById(item.productId);
 
     if (!product) {
-      return res.status(404).json({
-        message: `Product ${item.productId} not found`,
-      });
+      continue;
     }
 
-    // ❗あえて雑（デモ用）
     total += product.price * item.quantity;
-
-    // ❗在庫チェックなし（デモ用バグ）
-    product.stock -= item.quantity;
   }
 
+  return total;
+}
+
+function decreaseStock(items: OrderItem[]): void {
+  for (const item of items) {
+    const product = findProductById(item.productId);
+
+    if (!product) {
+      continue;
+    }
+
+    product.stock -= item.quantity;
+  }
+}
+
+function createOrder(items: OrderItem[], total: number): Order {
   const order: Order = {
     id: orders.length + 1,
     items,
@@ -84,7 +138,68 @@ app.post("/orders", (req, res) => {
 
   orders.push(order);
 
-  res.json(order);
+  return order;
+}
+
+// --------------------
+// API
+// --------------------
+
+// 商品一覧取得
+app.get("/products", (req: Request, res: Response) => {
+  try {
+    res.status(200).json(products);
+  } catch (error) {
+    console.error("Failed to get products:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+// 注文作成
+app.post("/orders", (req: Request, res: Response) => {
+  try {
+    const { items } = req.body as { items?: unknown };
+
+    // 1. リクエスト受信・入力値検証
+    if (!validateOrderItems(items)) {
+      return res.status(400).json({
+        message: "Items are required and must contain valid productId and quantity.",
+      });
+    }
+
+    // 2. 商品検索
+    const productCheck = validateProductsExist(items);
+    if (!productCheck.ok) {
+      return res.status(404).json({
+        message: `Product ${productCheck.productId} not found.`,
+      });
+    }
+
+    // 3. 在庫確認
+    const stockCheck = validateStock(items);
+    if (!stockCheck.ok) {
+      return res.status(400).json({
+        message: `Insufficient stock for product ${stockCheck.productId}. Requested: ${stockCheck.requested}, Available: ${stockCheck.stock}.`,
+      });
+    }
+
+    // 4. 合計金額計算
+    const total = calculateTotal(items);
+
+    // 5. 在庫減算
+    decreaseStock(items);
+
+    // 6. 注文生成
+    const order = createOrder(items, total);
+
+    // 7. レスポンス返却
+    return res.status(201).json(order);
+  } catch (error) {
+    console.error("Failed to create order:", error);
+    return res.status(500).json({
+      message: "Internal Server Error",
+    });
+  }
 });
 
 // --------------------
