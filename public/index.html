@@ -19,7 +19,17 @@
       </nav>
 
       <div class="header-actions">
-        <a href="#">Search</a>
+        <!-- 🔍 検索フォームここ -->
+        <form id="search-form" class="header-search-form">
+          <input
+            id="search-input"
+            type="text"
+            placeholder="商品名で検索"
+            class="header-search-input"
+          />
+          <button type="submit" class="header-search-button">Search</button>
+        </form>
+
         <a href="#">Cart</a>
       </div>
     </div>
@@ -74,11 +84,21 @@
   </footer>
 
   <script>
-    async function loadProducts() {
-      const res = await fetch("/products");
+    async function loadProducts(keyword = "") {
+      const query = keyword ? `?keyword=${encodeURIComponent(keyword)}` : "";
+      const res = await fetch(`/products${query}`);
       const products = await res.json();
 
       const productList = document.getElementById("product-list");
+
+      if (products.length === 0) {
+        productList.innerHTML = `
+          <div class="empty-state">
+            検索条件に一致する商品が見つかりませんでした。
+          </div>
+        `;
+        return;
+      }
 
       productList.innerHTML = products.map((product) => {
         const soldOut = product.stock <= 0;
@@ -101,7 +121,7 @@
               </div>
 
               <div class="stock">
-                ${soldOut ? "Out of stock" : `在庫 ${product.stock}`}
+                ${soldOut ? "在庫切れ" : `在庫 ${product.stock}`}
               </div>
 
               <button
@@ -136,10 +156,29 @@
       }
 
       alert("注文しました: 合計 ¥" + data.total.toLocaleString());
-      loadProducts();
+
+      const searchInput = document.getElementById("search-input");
+      const keyword = searchInput ? searchInput.value : "";
+      loadProducts(keyword);
     }
 
-    loadProducts();
+    function handleSearch(event) {
+      event.preventDefault();
+
+      const searchInput = document.getElementById("search-input");
+      const keyword = searchInput ? searchInput.value : "";
+      loadProducts(keyword);
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+      const form = document.getElementById("search-form");
+
+      if (form) {
+        form.addEventListener("submit", handleSearch);
+      }
+
+      loadProducts();
+    });
   </script>
 </body>
 </html>

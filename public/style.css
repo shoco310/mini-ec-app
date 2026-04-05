@@ -315,3 +315,42 @@ img {
     gap: 16px;
   }
 }
+
+.header-search-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-search-input {
+  border: 1px solid #d9d4cd;
+  background: #fff;
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-size: 14px;
+  min-width: 180px;
+}
+
+.header-search-button {
+  border: none;
+  background: #111111;
+  color: #ffffff;
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.header-search-button:hover {
+  opacity: 0.9;
+}
+
+.empty-state {
+  grid-column: 1 / -1;
+  background: #ffffff;
+  border: 1px solid #ece8e2;
+  border-radius: 20px;
+  padding: 32px;
+  text-align: center;
+  color: #666;
+}

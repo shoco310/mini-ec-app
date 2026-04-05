@@ -6,7 +6,7 @@ const app = express();
 // JSON受け取り
 app.use(express.json());
 
-// public フォルダを配信
+// publicフォルダ配信
 app.use(express.static(path.join(__dirname, "public")));
 
 // --------------------
@@ -36,7 +36,7 @@ type Order = {
 let products: Product[] = [
   { id: 1, name: "Keyboard", price: 5000, stock: 10 },
   { id: 2, name: "Mouse", price: 2000, stock: 5 },
-  { id: 3, name: "Monitor", price: 30000, stock: 3 },
+  { id: 3, name: "Monitor", price: 30000, stock: 0 },
 ];
 
 let orders: Order[] = [];
@@ -68,7 +68,25 @@ function findProductById(productId: number): Product | undefined {
   return products.find((product) => product.id === productId);
 }
 
-function validateProductsExist(items: OrderItem[]): { ok: true } | { ok: false; productId: number } {
+function filterProductsByKeyword(keyword?: string): Product[] {
+  if (!keyword) {
+    return products;
+  }
+
+  const normalizedKeyword = keyword.trim().toLowerCase();
+
+  if (!normalizedKeyword) {
+    return products;
+  }
+
+  return products.filter((product) =>
+    product.name.toLowerCase().includes(normalizedKeyword)
+  );
+}
+
+function validateProductsExist(
+  items: OrderItem[]
+): { ok: true } | { ok: false; productId: number } {
   for (const item of items) {
     const product = findProductById(item.productId);
 
@@ -80,7 +98,11 @@ function validateProductsExist(items: OrderItem[]): { ok: true } | { ok: false; 
   return { ok: true };
 }
 
-function validateStock(items: OrderItem[]): { ok: true } | { ok: false; productId: number; stock: number; requested: number } {
+function validateStock(
+  items: OrderItem[]
+):
+  | { ok: true }
+  | { ok: false; productId: number; stock: number; requested: number } {
   for (const item of items) {
     const product = findProductById(item.productId);
 
@@ -145,10 +167,15 @@ function createOrder(items: OrderItem[], total: number): Order {
 // API
 // --------------------
 
-// 商品一覧取得
+// 商品一覧取得（検索対応）
 app.get("/products", (req: Request, res: Response) => {
   try {
-    res.status(200).json(products);
+    const keyword =
+      typeof req.query.keyword === "string" ? req.query.keyword : undefined;
+
+    const filteredProducts = filterProductsByKeyword(keyword);
+
+    res.status(200).json(filteredProducts);
   } catch (error) {
     console.error("Failed to get products:", error);
     res.status(500).json({ message: "Internal Server Error" });
@@ -160,14 +187,15 @@ app.post("/orders", (req: Request, res: Response) => {
   try {
     const { items } = req.body as { items?: unknown };
 
-    // 1. リクエスト受信・入力値検証
+    // 1. 入力値検証
     if (!validateOrderItems(items)) {
       return res.status(400).json({
-        message: "Items are required and must contain valid productId and quantity.",
+        message:
+          "Items are required and must contain valid productId and quantity.",
       });
     }
 
-    // 2. 商品検索
+    // 2. 商品存在チェック
     const productCheck = validateProductsExist(items);
     if (!productCheck.ok) {
       return res.status(404).json({
