@@ -139,17 +139,9 @@ function calculateTotal(items: OrderItem[]): number {
 }
 
 function calculatePaymentFee(subtotal: number): number {
-  // v3先行実装：決済手数料は商品合計金額の5%
+  // 決済手数料は商品合計金額の5%
   // ただし、最低手数料は300円とする
-  // 
-  // 例：
-  // subtotal = 5,000円 の場合
-  // 5,000円 × 5% = 250円
-  // 最低手数料300円を下回るため、paymentFee = 300円
-  //
-  // subtotal = 30,000円 の場合
-  // 30,000円 × 5% = 1,500円
-  // paymentFee = 1,500円
+
   return Math.max(300, Math.floor(subtotal * 0.05));
 }
 
