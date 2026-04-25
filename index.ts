@@ -3,10 +3,7 @@ import path from "path";
 
 const app = express();
 
-// JSON受け取り
 app.use(express.json());
-
-// publicフォルダ配信
 app.use(express.static(path.join(__dirname, "public")));
 
 // --------------------
@@ -27,6 +24,8 @@ type OrderItem = {
 type Order = {
   id: number;
   items: OrderItem[];
+  subtotal: number;
+  paymentFee: number;
   total: number;
 };
 
@@ -139,6 +138,13 @@ function calculateTotal(items: OrderItem[]): number {
   return total;
 }
 
+function calculatePaymentFee(subtotal: number): number {
+  // 旧仕様：決済手数料は一律300円
+  // 仕様書では「基本手数料300円 + 商品合計金額の3%」となっているため、
+  // KI Checkerのデモではこの差分を不整合として検知させる
+  return 300;
+}
+
 function decreaseStock(items: OrderItem[]): void {
   for (const item of items) {
     const product = findProductById(item.productId);
@@ -151,10 +157,17 @@ function decreaseStock(items: OrderItem[]): void {
   }
 }
 
-function createOrder(items: OrderItem[], total: number): Order {
+function createOrder(
+  items: OrderItem[],
+  subtotal: number,
+  paymentFee: number,
+  total: number
+): Order {
   const order: Order = {
     id: orders.length + 1,
     items,
+    subtotal,
+    paymentFee,
     total,
   };
 
@@ -166,8 +179,6 @@ function createOrder(items: OrderItem[], total: number): Order {
 // --------------------
 // API
 // --------------------
-
-// 商品一覧取得（検索対応）
 app.get("/products", (req: Request, res: Response) => {
   try {
     const keyword =
@@ -182,48 +193,44 @@ app.get("/products", (req: Request, res: Response) => {
   }
 });
 
-// 注文作成
 app.post("/orders", (req: Request, res: Response) => {
   try {
     const { items } = req.body as { items?: unknown };
 
-    // 1. 入力値検証
     if (!validateOrderItems(items)) {
       return res.status(400).json({
-        message:
-          "Items are required and must contain valid productId and quantity.",
+        message: "Items are required and must contain valid productId and quantity.",
       });
     }
 
-    // 2. 商品存在チェック
     const productCheck = validateProductsExist(items);
+
     if (!productCheck.ok) {
       return res.status(404).json({
         message: `Product ${productCheck.productId} not found.`,
       });
     }
 
-    // 3. 在庫確認
     const stockCheck = validateStock(items);
+
     if (!stockCheck.ok) {
       return res.status(400).json({
         message: `Insufficient stock for product ${stockCheck.productId}. Requested: ${stockCheck.requested}, Available: ${stockCheck.stock}.`,
       });
     }
 
-    // 4. 合計金額計算
-    const total = calculateTotal(items);
+    const subtotal = calculateTotal(items);
+    const paymentFee = calculatePaymentFee(subtotal);
+    const total = subtotal + paymentFee;
 
-    // 5. 在庫減算
     decreaseStock(items);
 
-    // 6. 注文生成
-    const order = createOrder(items, total);
+    const order = createOrder(items, subtotal, paymentFee, total);
 
-    // 7. レスポンス返却
     return res.status(201).json(order);
   } catch (error) {
     console.error("Failed to create order:", error);
+
     return res.status(500).json({
       message: "Internal Server Error",
     });
